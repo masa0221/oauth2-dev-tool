@@ -9,10 +9,6 @@ do
 done
 
 
-CONFIG_PATH="${HOME}/.$(basename ${0})"
-CLIENT_NAME="default"
-CONFIG_FILE="${CONFIG_PATH}/${CLIENT_NAME}"
-
 function auth {
     open $(get_login_url)
 }
@@ -65,14 +61,15 @@ function add_refresh_token {
 function create_config {
     if [ -e ${CONFIG_FILE} ]; then
         read -p "Settings file is already exist. Are you sure over write?[y/n]: " WRITE_OK
-        # if [ "${WRITE_OK}" == "n" ]; then
-        #     exit 1
-        # fi
         case "$WRITE_OK" in
           [nN]) exit 1 ;;
         esac
     fi
-    read -p "CLIENT_ID: " CLIENT_ID
+    local default_value=""
+    if [ "${CLIENT_ID}" != "" ]; then
+        default_value="[${CLIENT_ID}]"
+    fi
+    read -p "CLIENT_ID${default_value}: " CLIENT_ID
     if [ -z ${CLIENT_ID} ]; then
         echo "CLIENT_ID is require"
         exit 1
@@ -124,38 +121,46 @@ function usage {
 $(basename ${0}) is a tool for OAuth 2.0 development
 
 Usage:
-    $(basename ${0}) [create]       -- Create client config file
-    $(basename ${0}) auth           -- Open authorize and authentication URL
-    $(basename ${0}) token CODE     -- Issule token
-    $(basename ${0}) refresh        -- Reflesh token
+    $(basename ${0}) new [NAME]     Create client config file
+    $(basename ${0}) auth           Open authorize and authentication URL
+    $(basename ${0}) token CODE     Issule token
+    $(basename ${0}) refresh        Reflesh token
 
 Options:
-    -h                    -- print this
+    -n                   Specifiy client config file name
+    -h                   print this
 EOF
 }
 
-while getopts h OPT
+CLIENT_NAME="default"
+while getopts n:h OPT
 do
-    case $OPT in
-        h)  usage_exit
+    case ${OPT} in
+        n)
+            CLIENT_NAME=${OPTARG}
+            ;;
+        h)  
+            usage_exit
             ;;
     esac
 done
 
 shift $((OPTIND - 1))
 
+CONFIG_PATH="${HOME}/.$(basename ${0})"
+CONFIG_FILE="${CONFIG_PATH}/${CLIENT_NAME}"
+
 if [ -e ${CONFIG_FILE} ]; then
     . ${CONFIG_FILE}
 else
     create_config
-    echo ""
     usage_exit
 fi
 
 COMMAND=${1}
 if [ -z ${COMMAND} ]; then
     usage_exit
-elif [ "${COMMAND}" == "create" ]; then
+elif [ "${COMMAND}" == "new" ]; then
     create_config
 elif [ "${COMMAND}" == "auth" ]; then
     auth
