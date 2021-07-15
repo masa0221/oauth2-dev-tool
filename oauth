@@ -1,0 +1,174 @@
+#!/bin/bash
+
+for require_command in "jq" "nkf"
+do
+    if !(type ${require_command} > /dev/null 2>&1); then
+        echo "Please install ${require_command}"
+        exit 1
+    fi
+done
+
+
+CONFIG_PATH="${HOME}/.$(basename ${0})"
+CLIENT_NAME="default"
+CONFIG_FILE="${CONFIG_PATH}/${CLIENT_NAME}"
+
+function auth {
+    open $(get_login_url)
+}
+
+function get_login_url {
+    echo "${LOGIN_URL}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=$(get_redirect_uri)&state=foobar&scope=${SCOPE}"
+}
+
+function get_redirect_uri {
+    echo "${REDIRECT_URI}" | nkf -WwMQ | sed 's/=$//g' | tr = % | tr -d '\n'
+}
+
+function request_token {
+    local authorization=$(echo -n "${CLIENT_ID}:${CLIENT_SECRET}" | base64)
+    local response=$(curl -s -X POST \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -H "Authorization: Basic ${authorization}" \
+        -d "grant_type=authorization_code&redirect_uri=$(get_redirect_uri)&code=${1}" \
+        "${TOKEN_ENDPOINT}")
+
+    local refresh_token=$(echo $response | jq -r .refresh_token)
+    add_refresh_token ${refresh_token}
+
+    echo ${response}
+}
+
+function refresh_token {
+    local response=$(
+        curl -s -X POST \
+            --user "${CLIENT_ID}:${CLIENT_SECRET}" \
+            -d "grant_type=refresh_token&refresh_token=${REFRESH_TOKEN}&scope=${SCOPE}" "${TOKEN_ENDPOINT}"
+    )
+
+    local refresh_token=$(echo $response | jq -r .refresh_token)
+    if [ "${refresh_token}" != "null" ]; then
+        add_refresh_token ${refresh_token}
+    fi
+
+    echo ${response}
+}
+
+function add_refresh_token {
+    if grep -q "REFRESH_TOKEN" ${CONFIG_FILE}; then
+        sed -i '' -e "s/\(REFRESH_TOKEN *= *\"\).*\(\"\)/\1${1}\2/g" ${CONFIG_FILE}
+    else
+        echo "REFRESH_TOKEN=\"${1}\"" >> ${CONFIG_FILE}
+    fi
+}
+
+function create_config {
+    if [ -e ${CONFIG_FILE} ]; then
+        read -p "Settings file is already exist. Are you sure over write?[y/n]: " WRITE_OK
+        # if [ "${WRITE_OK}" == "n" ]; then
+        #     exit 1
+        # fi
+        case "$WRITE_OK" in
+          [nN]) exit 1 ;;
+        esac
+    fi
+    read -p "CLIENT_ID: " CLIENT_ID
+    if [ -z ${CLIENT_ID} ]; then
+        echo "CLIENT_ID is require"
+        exit 1
+    fi
+    read -p "CLIENT_SECRET: " CLIENT_SECRET
+    if [ -z ${CLIENT_SECRET} ]; then
+        echo "CLIENT_SECRET is require"
+        exit 1
+    fi
+    read -p "REDIRECT_URI: " REDIRECT_URI
+    if [ -z ${REDIRECT_URI} ]; then
+        echo "REDIRECT_URI is require"
+        exit 1
+    fi
+    read -p "SCOPE: " SCOPE
+    if [ -z ${SCOPE} ]; then
+        echo "SCOPE is require"
+        exit 1
+    fi
+    read -p "LOGIN_URL: " LOGIN_URL
+    if [ -z ${LOGIN_URL} ]; then
+        echo "LOGIN_URL is require"
+        exit 1
+    fi
+    read -p "TOKEN_ENDPOINT: " TOKEN_ENDPOINT
+    if [ -z ${TOKEN_ENDPOINT} ]; then
+        echo "TOKEN_ENDPOINT is require"
+        exit 1
+    fi
+    mkdir ${CONFIG_PATH}
+cat << EOT > ${CONFIG_FILE}
+CLIENT_ID="${CLIENT_ID}"
+CLIENT_SECRET="${CLIENT_SECRET}"
+REDIRECT_URI="${REDIRECT_URI}"
+SCOPE="${SCOPE}"
+LOGIN_URL="${LOGIN_URL}"
+TOKEN_ENDPOINT="${TOKEN_ENDPOINT}"
+EOT
+    echo "Created! (${CONFIG_FILE})"
+}
+
+usage_exit() {
+    usage
+    exit 0
+}
+
+function usage {
+    cat <<EOF
+$(basename ${0}) is a tool for OAuth 2.0 development
+
+Usage:
+    $(basename ${0}) [create]       -- Create client config file
+    $(basename ${0}) auth           -- Open authorize and authentication URL
+    $(basename ${0}) token CODE     -- Issule token
+    $(basename ${0}) refresh        -- Reflesh token
+
+Options:
+    -h                    -- print this
+EOF
+}
+
+while getopts h OPT
+do
+    case $OPT in
+        h)  usage_exit
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+if [ -e ${CONFIG_FILE} ]; then
+    . ${CONFIG_FILE}
+else
+    create_config
+    echo ""
+    usage_exit
+fi
+
+COMMAND=${1}
+if [ -z ${COMMAND} ]; then
+    usage_exit
+elif [ "${COMMAND}" == "create" ]; then
+    create_config
+elif [ "${COMMAND}" == "auth" ]; then
+    auth
+elif [ "${COMMAND}" == "token" ]; then
+    request_token ${2}
+elif [ "${COMMAND}" == "refresh" ]; then
+    if [ "${REFRESH_TOKEN}" == "" ]; then
+        echo "There is no REFRESH_TOKEN. Please use token command."
+        exit 1
+    else
+        refresh_token
+    fi
+else
+    usage_exit
+fi
+
