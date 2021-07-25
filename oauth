@@ -149,8 +149,8 @@ Usage:
     $(basename ${0}) client delete NAME    Delete config of specified client
     $(basename ${0}) new [NAME]            Alias command of client new
     $(basename ${0}) auth                  Open authorize and authentication URL
-    $(basename ${0}) token CODE            Issule token
-    $(basename ${0}) refresh               Reflesh token
+    $(basename ${0}) token CODE|refresh    Issue token or Reissue token
+                                The subcommand reflesh can be get new token using by reflesh token when already issue token.
 
 Options:
     -n                   Specifiy client config file name
@@ -204,13 +204,15 @@ elif [ "${COMMAND}" == "client" ]; then
 elif [ "${COMMAND}" == "auth" ]; then
     auth
 elif [ "${COMMAND}" == "token" ]; then
-    request_token ${2}
-elif [ "${COMMAND}" == "refresh" ]; then
-    if [ "${REFRESH_TOKEN}" == "" ]; then
-        echo "There is no REFRESH_TOKEN. Please use token command."
-        exit 1
+    if [ "${2}" == "refresh" ]; then
+        if [ "${REFRESH_TOKEN}" == "" ]; then
+            echo "There is no REFRESH_TOKEN. Please use token command."
+            exit 1
+        else
+            refresh_token
+        fi
     else
-        refresh_token
+        request_token ${2}
     fi
 else
     usage_exit
