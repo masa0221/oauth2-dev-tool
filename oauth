@@ -81,17 +81,14 @@ function create_config {
         done
     fi
     
-    declare -A client_vars
     for client_var_name in ${client_var_names[@]}; do
-	    echo ${CLIENT_ID}
-	    echo ${client_var_name}
         local before_value=${!client_var_name:-"None"}
-    	read -p "${client_var_name}[${before_value}]: " INPUT_VALUE
-    	client_vars[${client_var_name}]="${INPUT_VALUE:-${!client_var_name}}"
-    	if [ "${client_vars[${client_var_name}]}" == "" ]; then
-        	echo "${client_var_name} is require"
-        	exit 1
-    	fi
+        read -p "${client_var_name}[${before_value}]: " INPUT_VALUE
+        client_vars[${client_var_name}]="${INPUT_VALUE:-${!client_var_name}}"
+        if [ "${client_vars[${client_var_name}]}" == "" ]; then
+            echo "${client_var_name} is require"
+            exit 1
+        fi
     done
 
     mkdir -p ${CONFIG_PATH}
@@ -107,10 +104,10 @@ EOT
 }
 
 function list_config {
-	for config_file in $(ls ${CONFIG_PATH}); do
-		local client_id=$(grep CLIENT_ID "${CONFIG_PATH}/${config_file}" | sed -e 's/CLIENT_ID="\([^"]*\)"/\1/g')
-		echo $(basename ${config_file})" (${client_id})"
-	done
+    for config_file in $(ls ${CONFIG_PATH}); do
+        local client_id=$(grep CLIENT_ID "${CONFIG_PATH}/${config_file}" | sed -e 's/CLIENT_ID="\([^"]*\)"/\1/g')
+        echo $(basename ${config_file})" (${client_id})"
+    done
 }
 
 function exist_config {
