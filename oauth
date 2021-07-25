@@ -75,17 +75,19 @@ function create_config {
         case "$WRITE_OK" in
           [nN]) exit 1 ;;
         esac
-    else 
+        . ${create_config_file}
+    else
+        # clear default settings
         for client_var_name in ${client_var_names[@]}; do
             unset "${client_var_name}"
         done
     fi
     
     for client_var_name in ${client_var_names[@]}; do
-        local before_value=${!client_var_name:-"None"}
-        read -p "${client_var_name}[${before_value}]: " INPUT_VALUE
-        client_vars[${client_var_name}]="${INPUT_VALUE:-${!client_var_name}}"
-        if [ "${client_vars[${client_var_name}]}" == "" ]; then
+        local before_value=${!client_var_name}
+        read -p "${client_var_name}[${before_value:-"None"}]: " INPUT_VALUE
+        eval ${client_var_name}="${INPUT_VALUE:-${!client_var_name}}"
+        if [ "${!client_var_name}" == "" ]; then
             echo "${client_var_name} is require"
             exit 1
         fi
@@ -93,12 +95,12 @@ function create_config {
 
     mkdir -p ${CONFIG_PATH}
 cat << EOT > ${create_config_file}
-CLIENT_ID="${client_vars[CLIENT_ID]}"
-CLIENT_SECRET="${client_vars[CLIENT_SECRET]}"
-REDIRECT_URI="${client_vars[REDIRECT_URI]}"
-SCOPE="${client_vars[SCOPE]}"
-LOGIN_URL="${client_vars[LOGIN_URL]}"
-TOKEN_ENDPOINT="${client_vars[TOKEN_ENDPOINT]}"
+CLIENT_ID="${CLIENT_ID}"
+CLIENT_SECRET="${CLIENT_SECRET}"
+REDIRECT_URI="${REDIRECT_URI}"
+SCOPE="${SCOPE}"
+LOGIN_URL="${LOGIN_URL}"
+TOKEN_ENDPOINT="${TOKEN_ENDPOINT}"
 EOT
     echo "Created! (${create_config_file})"
 }
@@ -140,7 +142,7 @@ function usage {
 $(basename ${0}) is a tool for OAuth 2.0 development
 
 Usage:
-    $(basename ${0}) client new [NAME]     Create client config file
+    $(basename ${0}) client create [NAME]  Create client config file
     $(basename ${0}) client list           Display list of clients
     $(basename ${0}) client show NAME      Show config of specified client
     $(basename ${0}) client delete NAME    Delete config of specified client
@@ -187,7 +189,7 @@ elif [ "${COMMAND}" == "new" ]; then
     create_config ${2:-${CLIENT_NAME}}
 elif [ "${COMMAND}" == "client" ]; then
     SUB_COMMAND=${2}
-    if [ "${SUB_COMMAND}" == "new" ]; then
+    if [ "${SUB_COMMAND}" == "create" ]; then
         create_config ${3:-${CLIENT_NAME}}
     elif [ "${SUB_COMMAND}" == "list" ]; then
         list_config
