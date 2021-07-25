@@ -59,59 +59,81 @@ function add_refresh_token {
 }
 
 function create_config {
-    if [ -e ${CONFIG_FILE} ]; then
-        read -p "Settings file is already exist. Are you sure over write?[y/n]: " WRITE_OK
+    local create_client_name=${1:-${CLIENT_NAME}}
+    local create_config_file="${CONFIG_PATH}/${create_client_name}"
+    local client_var_names=(
+        CLIENT_ID
+        CLIENT_SECRET
+        REDIRECT_URI
+        SCOPE
+        LOGIN_URL
+        TOKEN_ENDPOINT
+    )
+    if [ -e ${create_config_file} ]; then
+        echo "Config file is already exist (${create_config_file})"
+        read -p "Are you sure over write?[y/n]: " WRITE_OK
         case "$WRITE_OK" in
           [nN]) exit 1 ;;
         esac
+    else 
+        for client_var_name in ${client_var_names[@]}; do
+            unset "${client_var_name}"
+        done
     fi
-    local default_value=""
-    if [ "${CLIENT_ID}" != "" ]; then
-        default_value="[${CLIENT_ID}]"
-    fi
-    read -p "CLIENT_ID${default_value}: " CLIENT_ID
-    if [ -z ${CLIENT_ID} ]; then
-        echo "CLIENT_ID is require"
-        exit 1
-    fi
-    read -p "CLIENT_SECRET: " CLIENT_SECRET
-    if [ -z ${CLIENT_SECRET} ]; then
-        echo "CLIENT_SECRET is require"
-        exit 1
-    fi
-    read -p "REDIRECT_URI: " REDIRECT_URI
-    if [ -z ${REDIRECT_URI} ]; then
-        echo "REDIRECT_URI is require"
-        exit 1
-    fi
-    read -p "SCOPE: " SCOPE
-    if [ -z ${SCOPE} ]; then
-        echo "SCOPE is require"
-        exit 1
-    fi
-    read -p "LOGIN_URL: " LOGIN_URL
-    if [ -z ${LOGIN_URL} ]; then
-        echo "LOGIN_URL is require"
-        exit 1
-    fi
-    read -p "TOKEN_ENDPOINT: " TOKEN_ENDPOINT
-    if [ -z ${TOKEN_ENDPOINT} ]; then
-        echo "TOKEN_ENDPOINT is require"
-        exit 1
-    fi
-    mkdir ${CONFIG_PATH}
-cat << EOT > ${CONFIG_FILE}
-CLIENT_ID="${CLIENT_ID}"
-CLIENT_SECRET="${CLIENT_SECRET}"
-REDIRECT_URI="${REDIRECT_URI}"
-SCOPE="${SCOPE}"
-LOGIN_URL="${LOGIN_URL}"
-TOKEN_ENDPOINT="${TOKEN_ENDPOINT}"
+    
+    declare -A client_vars
+    for client_var_name in ${client_var_names[@]}; do
+	    echo ${CLIENT_ID}
+	    echo ${client_var_name}
+        local before_value=${!client_var_name:-"None"}
+    	read -p "${client_var_name}[${before_value}]: " INPUT_VALUE
+    	client_vars[${client_var_name}]="${INPUT_VALUE:-${!client_var_name}}"
+    	if [ "${client_vars[${client_var_name}]}" == "" ]; then
+        	echo "${client_var_name} is require"
+        	exit 1
+    	fi
+    done
+
+    mkdir -p ${CONFIG_PATH}
+cat << EOT > ${create_config_file}
+CLIENT_ID="${client_vars[CLIENT_ID]}"
+CLIENT_SECRET="${client_vars[CLIENT_SECRET]}"
+REDIRECT_URI="${client_vars[REDIRECT_URI]}"
+SCOPE="${client_vars[SCOPE]}"
+LOGIN_URL="${client_vars[LOGIN_URL]}"
+TOKEN_ENDPOINT="${client_vars[TOKEN_ENDPOINT]}"
 EOT
-    echo "Created! (${CONFIG_FILE})"
+    echo "Created! (${create_config_file})"
 }
 
-usage_exit() {
+function list_config {
+	for config_file in $(ls ${CONFIG_PATH}); do
+		local client_id=$(grep CLIENT_ID "${CONFIG_PATH}/${config_file}" | sed -e 's/CLIENT_ID="\([^"]*\)"/\1/g')
+		echo $(basename ${config_file})" (${client_id})"
+	done
+}
+
+function exist_config {
+    local config_file=${1}
+    if [ ! -e ${config_file} ];then
+        echo "The specified client config file is not found"
+        exit 1
+    fi
+}
+
+function show_config {
+    local config_file="${CONFIG_PATH}/${1}"
+    exist_config ${config_file}
+    cat ${config_file}
+}
+
+function delete_config {
+    local config_file="${CONFIG_PATH}/${1}"
+    exist_config ${config_file}
+    rm -i ${config_file}
+}
+
+function usage_exit {
     usage
     exit 0
 }
@@ -121,10 +143,14 @@ function usage {
 $(basename ${0}) is a tool for OAuth 2.0 development
 
 Usage:
-    $(basename ${0}) new [NAME]     Create client config file
-    $(basename ${0}) auth           Open authorize and authentication URL
-    $(basename ${0}) token CODE     Issule token
-    $(basename ${0}) refresh        Reflesh token
+    $(basename ${0}) client new [NAME]     Create client config file
+    $(basename ${0}) client list           Display list of clients
+    $(basename ${0}) client show NAME      Show config of specified client
+    $(basename ${0}) client delete NAME    Delete config of specified client
+    $(basename ${0}) new [NAME]            Alias command of client new
+    $(basename ${0}) auth                  Open authorize and authentication URL
+    $(basename ${0}) token CODE            Issule token
+    $(basename ${0}) refresh               Reflesh token
 
 Options:
     -n                   Specifiy client config file name
@@ -132,12 +158,11 @@ Options:
 EOF
 }
 
-CLIENT_NAME="default"
 while getopts n:h OPT
 do
     case ${OPT} in
         n)
-            CLIENT_NAME=${OPTARG}
+            INPUT_CLIENT_NAME=${OPTARG}
             ;;
         h)  
             usage_exit
@@ -147,6 +172,7 @@ done
 
 shift $((OPTIND - 1))
 
+CLIENT_NAME=${INPUT_CLIENT_NAME:-"default"}
 CONFIG_PATH="${HOME}/.$(basename ${0})"
 CONFIG_FILE="${CONFIG_PATH}/${CLIENT_NAME}"
 
@@ -161,7 +187,20 @@ COMMAND=${1}
 if [ -z ${COMMAND} ]; then
     usage_exit
 elif [ "${COMMAND}" == "new" ]; then
-    create_config
+    create_config ${2:-${CLIENT_NAME}}
+elif [ "${COMMAND}" == "client" ]; then
+    SUB_COMMAND=${2}
+    if [ "${SUB_COMMAND}" == "new" ]; then
+        create_config ${3:-${CLIENT_NAME}}
+    elif [ "${SUB_COMMAND}" == "list" ]; then
+        list_config
+    elif [ "${SUB_COMMAND}" == "show" ]; then
+        show_config ${3:-${CLIENT_NAME}}
+    elif [ "${SUB_COMMAND}" == "delete" ]; then
+        delete_config ${3:-${CLIENT_NAME}}
+    else
+        usage_exit
+    fi
 elif [ "${COMMAND}" == "auth" ]; then
     auth
 elif [ "${COMMAND}" == "token" ]; then
