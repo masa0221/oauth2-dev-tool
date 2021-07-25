@@ -86,7 +86,7 @@ function create_config {
     for client_var_name in ${client_var_names[@]}; do
         local before_value=${!client_var_name}
         read -p "${client_var_name}[${before_value:-"None"}]: " INPUT_VALUE
-        eval ${client_var_name}="${INPUT_VALUE:-${!client_var_name}}"
+        eval ${client_var_name}=\"${INPUT_VALUE:-${!client_var_name}}\"
         if [ "${!client_var_name}" == "" ]; then
             echo "${client_var_name} is require"
             exit 1
