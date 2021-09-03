@@ -2,11 +2,6 @@
 This is a tool for OAuth 2.0 development
 
 ## Installation
+```sh
+curl https://raw.githubusercontent.com/masa0221/oauth2-dev-tool/HEAD/oauth -o /usr/local/bin/oauth && chmod +x /usr/local/bin/oauth
 ```
-curl -s https://api.github.com/repos/masa0221/oauth2-dev-tool/releases/latest | jq -r '.assets[0].browser_download_url' | xargs curl -L -O
-```
-
-```
-chmod +x ./oauth && mv ./oauth /usr/local/bin/
-```
-
