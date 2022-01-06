@@ -10,15 +10,24 @@ done
 
 
 function auth {
+    echo "$(get_login_url)"
     open $(get_login_url)
 }
 
 function get_login_url {
-    echo "${LOGIN_URL}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=$(get_redirect_uri)&state=foobar&scope=${SCOPE}"
+    echo "${LOGIN_URL}?response_type=code&client_id=${CLIENT_ID}&redirect_uri=$(get_redirect_uri)&state=foobar&scope=$(get_scopes)"
 }
 
 function get_redirect_uri {
-    echo "${REDIRECT_URI}" | nkf -WwMQ | sed 's/=$//g' | tr = % | tr -d '\n'
+    echo $(urlencode ${REDIRECT_URI})
+}
+
+function get_scopes {
+    echo $(urlencode "${SCOPE}")
+}
+
+function urlencode {
+  echo "$1" | nkf -WwMQ | sed 's/=$//g' | tr = % | tr -d '\n'
 }
 
 function request_token {
@@ -39,7 +48,7 @@ function refresh_token {
     local response=$(
         curl -s -X POST \
             --user "${CLIENT_ID}:${CLIENT_SECRET}" \
-            -d "grant_type=refresh_token&refresh_token=${REFRESH_TOKEN}&scope=${SCOPE}" "${TOKEN_ENDPOINT}"
+            -d "grant_type=refresh_token&refresh_token=${REFRESH_TOKEN}&scope=$(get_scopes)" "${TOKEN_ENDPOINT}"
     )
 
     local refresh_token=$(echo $response | jq -r .refresh_token)
